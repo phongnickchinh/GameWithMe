@@ -3,6 +3,8 @@ from tkcalendar import Calendar
 from datetime import datetime
 from pymongo import MongoClient
 
+with open('mongo.txt', 'r') as file:
+    mongo_url = file.read().replace('\n', '')
 class AttendanceApp:
     def __init__(self, root):
         self.root = root
@@ -11,9 +13,13 @@ class AttendanceApp:
         self.root.geometry("600x600")
         self.root.bind("<Escape>", self.on_closing)
         self.root.bind("<BackSpace>", self.clear_day)
+        self.root.bind("<A>", self.toggle_morning)
+        self.root.bind("<a>", self.toggle_morning)
+        self.root.bind("<d>" , self.toggle_afternoon)
+        self.root.bind("<D>" , self.toggle_afternoon)
 
         # Kết nối tới MongoDB
-        self.client = MongoClient('mongodb+srv://phamphong300111:phamvanphong@phongpham300111.rqyu2st.mongodb.net/')
+        self.client = MongoClient(mongo_url)
         self.db = self.client['internship_db']
         self.collection = self.db['attendance']
         self.salrryy = self.db['salary']
@@ -93,7 +99,7 @@ class AttendanceApp:
         self.caculate_each_month()
 
     #When the user works in the morning
-    def toggle_morning(self):
+    def toggle_morning(self,event=None):
         date = self.calendar.get_date()
         if date not in self.attendance:
             self.attendance[date] = {'morning': False, 'afternoon': False}
@@ -102,7 +108,7 @@ class AttendanceApp:
         self.caculate_each_month()
 
     #When the user works in the afternoon
-    def toggle_afternoon(self):
+    def toggle_afternoon(self,event=None):
         date = self.calendar.get_date()
         if date not in self.attendance:
             self.attendance[date] = {'morning': False, 'afternoon': False}
@@ -167,10 +173,8 @@ class AttendanceApp:
 
     # Calculate the total salary of the month is displayed on the calendar
     def caculate_each_month(self):
-        print(self.salary_per_session)
         month = self.calendar.get_date().split('/')[0]
         year = self.calendar.get_date().split('/')[2]
-
         #number of sessions that month
         total_sessions = 0
         for date, days in self.attendance.items():
