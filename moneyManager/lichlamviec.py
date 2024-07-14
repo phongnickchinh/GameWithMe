@@ -2,9 +2,18 @@ import tkinter as tk
 from tkcalendar import Calendar
 from datetime import datetime
 from pymongo import MongoClient
+from save_data import Database
+""" TODO list:
+            1. send data to mentor app to manage your work schedule
+            2. one person can work 2 or more different jobs, make CRUD for jobs
+            3. Each job has a different salary type, make CRUD for salary type (per session, per month, per year, per hour)
+"""
 
-with open('mongo.txt', 'r') as file:
-    mongo_url = file.read().replace('\n', '')
+
+with open('P:\coddd\Python\GameWithMe\moneyManager\\mongo.txt', 'r') as file:
+    #flie bao gồm danh sách các url của mongodb, lấy tất cả các url
+    mongo_url = file.read().splitlines()
+    
 class AttendanceApp:
     def __init__(self, root):
         self.root = root
@@ -18,11 +27,20 @@ class AttendanceApp:
         self.root.bind("<d>" , self.toggle_afternoon)
         self.root.bind("<D>" , self.toggle_afternoon)
 
-        # Kết nối tới MongoDB
-        self.client = MongoClient(mongo_url)
-        self.db = self.client['internship_db']
-        self.collection = self.db['attendance']
-        self.salrryy = self.db['salary']
+        # try to connect to the database, prioritize the first url
+        
+        try:
+            for url in mongo_url:
+                self.db = Database(url)
+                self.db.client.server_info()
+                print(f"Connected to the database at {url}")
+                break
+            self.backup = Database('mongodb://localhost:27017/?directConnection=true')
+        except:
+            print(f"Failed to connect to {url}")
+            #create a connection to local database as a backup
+            self.db = Database('mongodb://localhost:27017/?directConnection=true')
+            print("Connected to the local database")
 
         # Tạo lịch chọn ngày
         self.calendar = Calendar(root, selectmode='day', year=datetime.now().year, month=datetime.now().month, day=datetime.now().day, font=("Arial", 14))
@@ -47,7 +65,7 @@ class AttendanceApp:
         self.salary_entry.pack(pady=5)
         #load the salary from the database
         self.salary_per_session = {}
-        for record in self.salrryy.find():
+        for record in self.db.salrryy.find():
             self.salary_per_session[record['month']] = record['salary']
         #when the user press enter, save the salary
         self.salary_entry.bind("<Return>", self.save_salary)
@@ -58,7 +76,7 @@ class AttendanceApp:
 
         # Dictionary to store the attendance of each day in the format {date: {morning: True/False, afternoon: True/False}}
         self.attendance = {}
-        for record in self.collection.find():
+        for record in self.db.collection.find():
             self.attendance[record['date']] = record['attendance']
             self.update_calendar(record['date'], 0)
         self.on_date_change(None)
@@ -66,7 +84,7 @@ class AttendanceApp:
     # Handle the closing event
     def on_closing(self,event=None):
         self.root.withdraw()
-        self.save_to_mongodb()
+        self.db.save_to_mongodb(self.attendance, self.salary_per_session)
         self.root.destroy()
 
     #Change month event
@@ -158,7 +176,11 @@ class AttendanceApp:
                 self.morning_button.config(bg='SystemButtonFace')
                 self.afternoon_button.config(bg='SystemButtonFace')
                 self.calendar.calevent_create(datetime.strptime(date, "%m/%d/%y"), 'Normal', 'normal')
-                self.calendar.tag_config('normal', background='white', foreground='black')
+                #Nếu là thứ 7 hoặc chủ nhật trong tháng thì màu #cccccc
+                if datetime.strptime(date, "%m/%d/%y").weekday() in [5, 6]:
+                    self.calendar.tag_config('normal', background='#cccccc', foreground='black')
+                else:
+                    self.calendar.tag_config('normal', background='white', foreground='black')
 
 
     def save_salary(self, event):
@@ -178,7 +200,7 @@ class AttendanceApp:
         #number of sessions that month
         total_sessions = 0
         for date, days in self.attendance.items():
-            if date.split('/')[0] == month:
+            if date.split('/')[0] == month and date.split('/')[2] == year:
                 if days['morning']:
                     total_sessions += 1
                 if days['afternoon']:
@@ -193,32 +215,6 @@ class AttendanceApp:
         except ValueError:
             self.result_label.config(text="Vui lòng nhập số lương hợp lệ")
 
-    #when everything is done, save the attendance,the salary to the database
-    def save_to_mongodb(self):
-        for date, days in self.attendance.items():
-
-            #delete the records are useless
-            if not days['morning'] and not days['afternoon']:
-                self.collection.delete_one({'date': date})
-            else:
-                self.collection.update_one(
-                    {'date': date},
-                    {'$set': {'attendance': days}},
-                    upsert=True
-                )
-
-        #save the salary each session for each month
-        for salary in self.salary_per_session:
-            if not self.salary_per_session[salary]:
-                #xoá bản ghi
-                self.salrryy.delete_one({'month': f"{salary.split('/')[0]}/{salary.split('/')[1]}"})
-            else:
-                self.salrryy.update_one(
-                    {'month': f"{salary.split('/')[0]}/{salary.split('/')[1]}"},
-                    {'$set': {'salary': self.salary_per_session[salary]}},
-                    upsert=True
-                )
-        print("Saving to MongoDB")
 
 # Run the app
 if __name__ == "__main__":
