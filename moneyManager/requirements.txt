@@ -1,0 +1,7 @@
+#danh sách thư viện cần pip trong dự án
+pymongo
+tkcalendar
+
+#how to install:
+#cd to the folder contains requirements.txt
+#run command: pip install -r requirements.txt
