@@ -62,7 +62,6 @@ class Database:
             return "You are in backup database"
         
         #tìm ra document có last_modified muộn nhất trong main database, ghi vào last_modified_main
-        start = time.time()
         last_modified_main = self.collection.find_one(sort=[("last_modified", pymongo.DESCENDING)])
         last_modified_main = last_modified_main['last_modified'] if last_modified_main else 0
 
@@ -71,8 +70,6 @@ class Database:
 
         #kiểm tra cursor có dữ liệu hay không
         if backup_database.collection.count_documents({'last_modified': {'$gt': last_modified_main}}) == 0:
-            end = time.time()
-            print(f"Found last_modified in {end - start} seconds")
             return "No new data to merge"
         else:
             for data in backup_data:
@@ -87,8 +84,6 @@ class Database:
                     upsert=True
                 )
 
-            end = time.time()
-            print(f"Found last_modified in {end - start} seconds")
             return "Merge successfully"
         
 

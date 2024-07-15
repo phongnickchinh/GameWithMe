@@ -54,7 +54,7 @@ class AttendanceApp:
         self.salary_label.pack(pady=5)
         self.salary_entry = tk.Entry(root, font=("Arial", 14))
         self.salary_entry.pack(pady=5)
-
+        self.root.update()
         # try to connect to the database, prioritize the first url in the list
         try:
             for i in (0, len(mongo_url)):
@@ -86,7 +86,7 @@ class AttendanceApp:
         # Show the result
         self.result_label = tk.Label(root, text="", font=("Arial", 14))
         self.result_label.pack(pady=5)
-
+        self.root.update()
         # Dictionary to store the attendance of each day in the format {date: {morning: True/False, afternoon: True/False}}
         self.attendance = {}
         self.modified = {}
@@ -97,7 +97,7 @@ class AttendanceApp:
             self.modified[record['date']]['modified_by'] = record.get('modified_by', self.db.client.server_info())
             self.update_calendar(record['date'], 0)
         self.on_date_change(None)
-
+        self.root.update()
     # Handle the closing event
     def on_closing(self,event=None):
         self.save_salary(None)
