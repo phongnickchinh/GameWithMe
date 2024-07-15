@@ -1,17 +1,20 @@
 import tkinter as tk
+from pathlib import Path
 from tkcalendar import Calendar
 from datetime import datetime
-from pymongo import MongoClient
 from save_data import Database
-""" TODO list:
+""" #TODO list:
             1. send data to mentor app to manage your work schedule
             2. one person can work 2 or more different jobs, make CRUD for jobs
             3. Each job has a different salary type, make CRUD for salary type (per session, per month, per year, per hour)
 """
 
 
-with open('P:\coddd\Python\GameWithMe\moneyManager\\mongo.txt', 'r') as file:
-    #flie bao gồm danh sách các url của mongodb, lấy tất cả các url
+
+current_directory = Path(__file__).parent
+database_string_path = current_directory /'mongo.txt'
+with database_string_path.open('r') as file:
+    #file includes a list of database urls, prioritize from top to bottom
     mongo_url = file.read().splitlines()
     
 class AttendanceApp:
@@ -27,34 +30,22 @@ class AttendanceApp:
         self.root.bind("<d>" , self.toggle_afternoon)
         self.root.bind("<D>" , self.toggle_afternoon)
 
-        # try to connect to the database, prioritize the first url
         
-        try:
-            for url in mongo_url:
-                self.db = Database(url)
-                self.db.client.server_info()
-                print(f"Connected to the database at {url}")
-                break
-            self.backup = Database('mongodb://localhost:27017/?directConnection=true')
-        except:
-            print(f"Failed to connect to {url}")
-            #create a connection to local database as a backup
-            self.db = Database('mongodb://localhost:27017/?directConnection=true')
-            print("Connected to the local database")
+        
 
-        # Tạo lịch chọn ngày
+        #Create a calendar to select the date
         self.calendar = Calendar(root, selectmode='day', year=datetime.now().year, month=datetime.now().month, day=datetime.now().day, font=("Arial", 14))
         self.calendar.pack(pady=20, padx=20)
         self.calendar.bind("<<CalendarSelected>>", self.on_date_change)
-        self.calendar.bind("<<CalendarMonthChanged>>", self.change_month)  #tạo sự kiện cho nút chuyển tháng
+        self.calendar.bind("<<CalendarMonthChanged>>", self.change_month)  #Change month event
         self.time_label = tk.Label(root, text="", font=("Arial", 14))
         self.time_label.pack(pady=5)
 
-        # Nút buổi sáng
+        #Morning button
         self.morning_button = tk.Button(root, text="Buổi sáng", font=("Arial", 14), command=self.toggle_morning)
         self.morning_button.pack(pady=5)
 
-        # Nút buổi chiều
+        #Afternoon button
         self.afternoon_button = tk.Button(root, text="Buổi chiều", font=("Arial", 14), command=self.toggle_afternoon)
         self.afternoon_button.pack(pady=5)
 
@@ -63,10 +54,32 @@ class AttendanceApp:
         self.salary_label.pack(pady=5)
         self.salary_entry = tk.Entry(root, font=("Arial", 14))
         self.salary_entry.pack(pady=5)
+
+        # try to connect to the database, prioritize the first url in the list
+        try:
+            for i in (0, len(mongo_url)):
+                self.db = Database(mongo_url[i])
+                self.db.client.server_info()
+                print(f"Connected to the database at {mongo_url[i]}")
+                break
+            #when main data is connected, connect to the backup database is the next url in the list
+            self.backup = Database(mongo_url[i+1])
+        except:
+            print(f"Failed to connect to clouds database")
+            #create a connection to local database as a backup, this database is the last one in the list
+            self.db = Database(mongo_url[-1])
+            print("Connected to the local database instead")
+            self.backup = None
+        #merge the data from the backup database to the main database (if any)
+        print (self.db.merge_data(self.backup))
         #load the salary from the database
         self.salary_per_session = {}
+        self.salary_modified = {}
+        self.salary_is_modified = {}
         for record in self.db.salrryy.find():
             self.salary_per_session[record['month']] = record['salary']
+            self.salary_modified[record['month']] = record.get('last_modified', datetime.now())
+            self.salary_is_modified[record['month']] = record.get('is_modified', False)
         #when the user press enter, save the salary
         self.salary_entry.bind("<Return>", self.save_salary)
         
@@ -76,15 +89,24 @@ class AttendanceApp:
 
         # Dictionary to store the attendance of each day in the format {date: {morning: True/False, afternoon: True/False}}
         self.attendance = {}
+        self.modified = {}
         for record in self.db.collection.find():
             self.attendance[record['date']] = record['attendance']
+            self.modified.setdefault(record['date'], {})['is_modified'] = record.get('is_modified', False)
+            self.modified[record['date']]['last_modified'] = record.get('last_modified', datetime.now())
+            self.modified[record['date']]['modified_by'] = record.get('modified_by', self.db.client.server_info())
             self.update_calendar(record['date'], 0)
         self.on_date_change(None)
 
     # Handle the closing event
     def on_closing(self,event=None):
+        self.save_salary(None)
         self.root.withdraw()
-        self.db.save_to_mongodb(self.attendance, self.salary_per_session)
+        if self.backup is not None:
+            self.db.save_data(self.attendance, self.modified, self.salary_per_session, self.salary_modified, self.salary_is_modified)
+            self.backup.save_data(self.attendance, self.modified, self.salary_per_session, self.salary_modified, self.salary_is_modified)
+        else:
+            self.db.save_data(self.attendance, self.modified, self.salary_per_session, self.salary_modified, self.salary_is_modified, "backup")
         self.root.destroy()
 
     #Change month event
@@ -106,7 +128,7 @@ class AttendanceApp:
         self.update_calendar(date, 0)
         self.time_label.config(text=f"Ngày chọn: {date}")
         month = self.calendar.get_displayed_month()
-        #chỉ lấy tháng và 2 số sau của năm 5/24
+        #Only show the salary of the selected month
         salary_keys = date.split('/')[0] + '/' + date.split('/')[2]
         if self.salary_per_session.get(salary_keys) is None:
             self.salary_per_session[salary_keys] = 0
@@ -122,6 +144,7 @@ class AttendanceApp:
         if date not in self.attendance:
             self.attendance[date] = {'morning': False, 'afternoon': False}
         self.attendance[date]['morning'] = not self.attendance[date]['morning']
+        self.modified[date] = {'is_modified': True, 'last_modified': datetime.now(), 'modified_by': self.db.client.server_info()}
         self.update_calendar(date, 1)
         self.caculate_each_month()
 
@@ -131,6 +154,7 @@ class AttendanceApp:
         if date not in self.attendance:
             self.attendance[date] = {'morning': False, 'afternoon': False}
         self.attendance[date]['afternoon'] = not self.attendance[date]['afternoon']
+        self.modified[date] = {'is_modified': True, 'last_modified': datetime.now(), 'modified_by': self.db.client.server_info()}
         self.update_calendar(date, 1)
         self.caculate_each_month()
 
@@ -139,6 +163,7 @@ class AttendanceApp:
         date = self.calendar.get_date()
         if date in self.attendance:
             self.attendance[date] = {'morning': False, 'afternoon': False}
+            self.modified[date] = {'is_modified': True, 'last_modified': datetime.now(), 'modified_by': self.db.client.server_info()}
             self.update_calendar(date, 1)
             self.caculate_each_month()
 
@@ -176,8 +201,8 @@ class AttendanceApp:
                 self.morning_button.config(bg='SystemButtonFace')
                 self.afternoon_button.config(bg='SystemButtonFace')
                 
-                #Nếu là thứ 7 hoặc chủ nhật trong tháng thì màu #cccccc
-                #nếu là ngày ngoài tháng th
+                #If weekend, change the color of the date to gray, otherwise, change it to white
+                #TODO: little bug here, Color is affected by same day in different month:
                 if datetime.strptime(date, "%m/%d/%y").weekday() in [5, 6]:
                     self.calendar.calevent_create(datetime.strptime(date, "%m/%d/%y"), 'Weekend', 'weekend')
                     self.calendar.tag_config('weekend', background='#cccccc', foreground='black')
@@ -188,10 +213,13 @@ class AttendanceApp:
 
     def save_salary(self, event):
         try:
+            print("Saving salary")
             salary_per_session = int(self.salary_entry.get())
             month = self.calendar.get_date().split('/')[0]
             year = self.calendar.get_date().split('/')[2]
             self.salary_per_session[f"{month}/{year}"] = salary_per_session
+            self.salary_modified[f"{month}/{year}"] = datetime.now()
+            self.salary_is_modified[f"{month}/{year}"] = True
             self.caculate_each_month()
         except ValueError:
             pass
