@@ -175,11 +175,14 @@ class AttendanceApp:
             elif type == 1:
                 self.morning_button.config(bg='SystemButtonFace')
                 self.afternoon_button.config(bg='SystemButtonFace')
-                self.calendar.calevent_create(datetime.strptime(date, "%m/%d/%y"), 'Normal', 'normal')
+                
                 #Nếu là thứ 7 hoặc chủ nhật trong tháng thì màu #cccccc
+                #nếu là ngày ngoài tháng th
                 if datetime.strptime(date, "%m/%d/%y").weekday() in [5, 6]:
-                    self.calendar.tag_config('normal', background='#cccccc', foreground='black')
+                    self.calendar.calevent_create(datetime.strptime(date, "%m/%d/%y"), 'Weekend', 'weekend')
+                    self.calendar.tag_config('weekend', background='#cccccc', foreground='black')
                 else:
+                    self.calendar.calevent_create(datetime.strptime(date, "%m/%d/%y"), 'Normal', 'normal')
                     self.calendar.tag_config('normal', background='white', foreground='black')
 
 
