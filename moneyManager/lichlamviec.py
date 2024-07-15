@@ -2,7 +2,7 @@ import tkinter as tk
 from pathlib import Path
 from tkcalendar import Calendar
 from datetime import datetime
-from save_data import Database
+from Database import Database
 """ #TODO list:
             1. send data to mentor app to manage your work schedule
             2. one person can work 2 or more different jobs, make CRUD for jobs
