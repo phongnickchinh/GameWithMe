@@ -37,7 +37,7 @@ class AttendanceApp:
         self.calendar = Calendar(root, selectmode='day', year=datetime.now().year, month=datetime.now().month, day=datetime.now().day, font=("Arial", 14))
         self.calendar.pack(pady=20, padx=20)
         self.calendar.bind("<<CalendarSelected>>", self.on_date_change)
-        self.calendar.bind("<<CalendarMonthChanged>>", self.change_month)  #Change month event
+        self.calendar.bind("<<CalendarMonthChanged>>", self.on_month_change)  #Change month event
         self.time_label = tk.Label(root, text="", font=("Arial", 14))
         self.time_label.pack(pady=5)
 
@@ -72,6 +72,7 @@ class AttendanceApp:
             self.backup = None
         #merge the data from the backup database to the main database (if any)
         print (self.db.merge_data(self.backup))
+
         #load the salary from the database
         self.salary_per_session = {}
         self.salary_modified = {}
@@ -87,6 +88,8 @@ class AttendanceApp:
         self.result_label = tk.Label(root, text="", font=("Arial", 14))
         self.result_label.pack(pady=5)
         self.root.update()
+
+        # Load the attendance from the database
         # Dictionary to store the attendance of each day in the format {date: {morning: True/False, afternoon: True/False}}
         self.attendance = {}
         self.modified = {}
@@ -96,8 +99,9 @@ class AttendanceApp:
             self.modified[record['date']]['last_modified'] = record.get('last_modified', datetime.now())
             self.modified[record['date']]['modified_by'] = record.get('modified_by', self.db.client.server_info())
             self.update_calendar(record['date'], 0)
+            self.root.update()
         self.on_date_change(None)
-        self.root.update()
+        
     # Handle the closing event
     def on_closing(self,event=None):
         self.save_salary(None)
@@ -110,7 +114,7 @@ class AttendanceApp:
         self.root.destroy()
 
     #Change month event
-    def change_month(self, event):
+    def on_month_change(self, event):
         #Change month event by get_displayed_month(). it returns a tuple (month, year)
         month= self.calendar.get_displayed_month()
         #Set the selected date to the first day of the month
