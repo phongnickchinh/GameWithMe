@@ -1,7 +1,7 @@
 import tkinter as tk
 from pathlib import Path
 from tkcalendar import Calendar
-from datetime import datetime
+from datetime import datetime, timedelta
 from Database import Database
 """ #TODO list:
             1. send data to mentor app to manage your work schedule
@@ -25,13 +25,24 @@ class AttendanceApp:
         self.root.geometry("600x600")
         self.root.bind("<Escape>", self.on_closing)
         self.root.bind("<BackSpace>", self.clear_day)
-        self.root.bind("<A>", self.toggle_morning)
+        self.root.bind("<q>", self.clear_day)
+        self.root.bind("<Q>", self.clear_day)
         self.root.bind("<a>", self.toggle_morning)
-        self.root.bind("<d>" , self.toggle_afternoon)
-        self.root.bind("<D>" , self.toggle_afternoon)
+        self.root.bind("<A>", self.toggle_morning)
+        self.root.bind("<d>", self.toggle_afternoon)
+        self.root.bind("<D>", self.toggle_afternoon)
+        self.root.bind("<s>", lambda event: (self.toggle_afternoon(), self.toggle_morning()))
+        self.root.bind("<S>", lambda event: (self.toggle_afternoon(), self.toggle_morning()))
 
-        
-        
+        self.root.bind("<W>", lambda event: self.salary_entry.focus_set())
+        self.root.bind("<w>", lambda event: self.salary_entry.focus_set())
+
+        #arrow keys to navigate the calendar
+        self.root.bind("<Left>", lambda event: self.calendar.selection_set(self.calendar.selection_get() - timedelta(1)))
+        self.root.bind("<Right>", lambda event: self.calendar.selection_set(self.calendar.selection_get() + timedelta(1)))
+        self.root.bind("<Up>", lambda event: self.calendar.selection_set(self.calendar.selection_get() - timedelta(7)))
+        self.root.bind("<Down>", lambda event: self.calendar.selection_set(self.calendar.selection_get() + timedelta(7)))
+        #TODO: page up and page down to change month, calendar have no prevoius method
 
         #Create a calendar to select the date
         self.calendar = Calendar(root, selectmode='day', year=datetime.now().year, month=datetime.now().month, day=datetime.now().day, font=("Arial", 14))
@@ -81,8 +92,8 @@ class AttendanceApp:
             self.salary_per_session[record['month']] = record['salary']
             self.salary_modified[record['month']] = record.get('last_modified', datetime.now())
             self.salary_is_modified[record['month']] = record.get('is_modified', False)
-        #when the user press enter, save the salary
-        self.salary_entry.bind("<Return>", self.save_salary)
+        #Shortcut for inputting the salary
+        self.salary_entry.bind("<Return>", lambda event: self.save_salary(None), self.calendar.focus_set())
         
         # Show the result
         self.result_label = tk.Label(root, text="", font=("Arial", 14))
@@ -218,6 +229,7 @@ class AttendanceApp:
     def save_salary(self, event):
         try:
             print("Saving salary")
+            root.focus_set()
             salary_per_session = int(self.salary_entry.get())
             month = self.calendar.get_date().split('/')[0]
             year = self.calendar.get_date().split('/')[2]
