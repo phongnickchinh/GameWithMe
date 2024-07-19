@@ -187,8 +187,9 @@ class AttendanceApp:
             self.update_calendar(date, 1)
             self.caculate_each_month()
 
-    # Update the calendar based on the attendance dictionary
+    
     def update_calendar(self, date, type):
+        """Update the calendar based on the attendance dictionary"""
         morning = self.attendance.get(date, {}).get('morning', False)
         afternoon = self.attendance.get(date, {}).get('afternoon', False)
         self.calendar.calevent_remove('morning', datetime.strptime(date, "%m/%d/%y"))
@@ -266,9 +267,9 @@ class AttendanceApp:
         except ValueError:
             self.result_label.config(text="Vui lòng nhập số lương hợp lệ")
 
-    #make function to export the data of the week when day is selected
+    
     def export_data_for_mentor(self, time=7):
-
+        """make function to export the data of the week when day is selected"""
         today = self.calendar.selection_get()
         #get the first day of the week
         start_date = today - timedelta(days=today.weekday())
