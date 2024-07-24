@@ -3,7 +3,9 @@ from pathlib import Path
 from tkcalendar import Calendar
 from datetime import datetime, timedelta
 from Database import Database
+from export import TextHandler
 """ #TODO list:
+`           0. multiple users // priority: low
             1. send data to mentor app to manage your work schedule
             2. one person can work 2 or more different jobs, make CRUD for jobs
             3. Each job has a different salary type, make CRUD for salary type (per session, per month, per year, per hour)
@@ -22,7 +24,10 @@ class AttendanceApp:
         self.root = root
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.title("Ứng dụng chấm công thực tập")
-        self.root.geometry("600x600")
+        self.root.geometry("400x600")
+
+        self.root.geometry("+%d+%d" % (root.winfo_screenwidth()-500, root.winfo_screenheight()//2 -350))
+
         self.root.bind("<Escape>", self.on_closing)
         self.root.bind("<BackSpace>", self.clear_day)
         self.root.bind("<q>", self.clear_day)
@@ -43,6 +48,10 @@ class AttendanceApp:
         self.root.bind("<Up>", lambda event: self.calendar.selection_set(self.calendar.selection_get() - timedelta(7)))
         self.root.bind("<Down>", lambda event: self.calendar.selection_set(self.calendar.selection_get() + timedelta(7)))
         #TODO: page up and page down to change month, calendar have no prevoius method
+        #Button when click the window will alway on top, set this button to bottom right
+        self.always_on_top_button = tk.Button(root, text="onTop", font=("Arial", 14), command=self.always_on_top)
+        self.always_on_top_button.pack(side=tk.BOTTOM, anchor=tk.SE)
+        self.root.update()
 
         #Create a calendar to select the date
         self.calendar = Calendar(root, selectmode='day', year=datetime.now().year, month=datetime.now().month, day=datetime.now().day, font=("Arial", 14))
@@ -112,6 +121,11 @@ class AttendanceApp:
             self.update_calendar(record['date'], 0)
             self.root.update()
         self.on_date_change(None)
+
+        # Export the data for the mentor
+        self.export_Button = tk.Button(root, text="Export Week data", font=("Time", 14), command=self.export_data_for_mentor)
+        self.export_Button.pack(side=tk.BOTTOM, anchor=tk.SE)
+        self.root.update()
         
     # Handle the closing event
     def on_closing(self,event=None):
@@ -123,6 +137,10 @@ class AttendanceApp:
         else:
             self.db.save_data(self.attendance, self.modified, self.salary_per_session, self.salary_modified, self.salary_is_modified, "backup")
         self.root.destroy()
+
+    # Set the window to always on top
+    def always_on_top(self):
+        self.root.attributes("-topmost", not self.root.attributes("-topmost"))
 
     #Change month event
     def on_month_change(self, event):
@@ -182,8 +200,9 @@ class AttendanceApp:
             self.update_calendar(date, 1)
             self.caculate_each_month()
 
-    # Update the calendar based on the attendance dictionary
+    
     def update_calendar(self, date, type):
+        """Update the calendar based on the attendance dictionary"""
         morning = self.attendance.get(date, {}).get('morning', False)
         afternoon = self.attendance.get(date, {}).get('afternoon', False)
         self.calendar.calevent_remove('morning', datetime.strptime(date, "%m/%d/%y"))
@@ -262,6 +281,41 @@ class AttendanceApp:
         except ValueError:
             self.result_label.config(text="Vui lòng nhập số lương hợp lệ")
 
+    
+    def export_data_for_mentor(self, time=7):
+        """make function to export the data of the week when day is selected"""
+        today = self.calendar.selection_get()
+        #get the first day of the week
+        start_date = today - timedelta(days=today.weekday())
+        end_date = start_date + timedelta(days=6)
+        week = {day: {'sáng': False, 'chiều': False} for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']}
+        for i in range(7):
+            date = start_date + timedelta(days=i)
+            self.calendar.selection_set(date)
+            #lấy thứ tuoong ứng với ngày
+            day = date.strftime("%A")
+
+            if day in week:
+                #key in attendance in the format of 'mm/dd/yy', and some key is not in the attendance, so we need to check if the key is in the attendance
+                key = self.calendar.get_date()
+                if key in self.attendance:
+                    week[day]['sáng'] = self.attendance[key].get('morning', False)
+                    week[day]['chiều'] = self.attendance[key].get('afternoon', False)
+                else:
+                    week[day]['sáng'] = False
+                    week[day]['chiều'] = False
+
+        self.calendar.selection_set(today)
+        week_string = f"Lịch làm tuần {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}:\n"
+        for day, sessions in week.items():
+            if sessions['sáng'] and sessions['chiều']:
+                week_string += f"• {TextHandler.replace_day_names(day)}: sáng, chiều\n"
+            elif sessions['sáng']:
+                week_string += f"• {TextHandler.replace_day_names(day)}: sáng\n"
+            elif sessions['chiều']:
+                week_string += f"• {TextHandler.replace_day_names(day)}: chiều\n"
+
+        TextHandler.save_to_clipboard(self.root, week_string)
 
 # Run the app
 if __name__ == "__main__":
